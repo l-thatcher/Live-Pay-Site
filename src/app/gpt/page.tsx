@@ -1,26 +1,27 @@
 "use client";
-
 import { useState, useEffect } from "react";
 
 export default function Home() {
   const [hourlyRate, setHourlyRate] = useState("");
   const [earnings, setEarnings] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [startTime, setStartTime] = useState(null);
+  const [startTime, setStartTime] = useState<number | null>(null);
 
   useEffect(() => {
-    let interval = null;
+    let interval: number | undefined;
 
-    if (isRunning) {
-      interval = setInterval(() => {
+    if (isRunning && startTime) {
+      interval = window.setInterval(() => {
         const elapsedSeconds = (Date.now() - startTime) / 1000;
         setEarnings((elapsedSeconds / 3600) * parseFloat(hourlyRate));
       }, 100);
-    } else {
-      clearInterval(interval);
     }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
+    };
   }, [isRunning, startTime, hourlyRate]);
 
   const handleStartStop = () => {
