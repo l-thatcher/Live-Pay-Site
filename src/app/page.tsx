@@ -1,101 +1,268 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect, useRef } from "react";
+import { Play, Pause, DollarSign, PoundSterling, Euro } from "lucide-react";
 
-export default function Home() {
+type Currency = {
+  code: string;
+  symbol: string;
+  icon: React.ReactNode;
+};
+
+type TabType = "hourly" | "yearly";
+
+export default function PayCounter() {
+  const [activeTab, setActiveTab] = useState<TabType>("hourly");
+  const [hourlyRate, setHourlyRate] = useState<number | null>(null);
+  const [yearlyRate, setYearlyRate] = useState<number | null>(null);
+  const [hourlyInput, setHourlyInput] = useState("");
+  const [yearlyInput, setYearlyInput] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
+  const [earnings, setEarnings] = useState(0);
+  const [inputError, setInputError] = useState("");
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>({
+    code: "GBP",
+    symbol: "£",
+    icon: <PoundSterling className="h-5 w-5" />,
+  });
+  const earningsInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const currencies: Currency[] = [
+    { code: "GBP", symbol: "£", icon: <PoundSterling className="h-5 w-5" /> },
+    { code: "EUR", symbol: "€", icon: <Euro className="h-5 w-5" /> },
+    { code: "USD", symbol: "$", icon: <DollarSign className="h-5 w-5" /> },
+  ];
+
+  const calculateYearProgress = () => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const timeDiff = now.getTime() - startOfYear.getTime();
+    const yearProgress = timeDiff / (1000 * 60 * 60 * 24 * 365);
+    return yearProgress;
+  };
+
+  const calculateYearlyEarnings = () => {
+    if (!yearlyRate) return 0;
+    return yearlyRate * calculateYearProgress();
+  };
+
+  const startCounter = () => {
+    if (activeTab === "hourly" && (!hourlyRate || hourlyRate <= 0)) {
+      setInputError("Please enter a valid hourly rate");
+      return;
+    }
+    setInputError("");
+    setIsRunning(true);
+  };
+
+  const stopCounter = () => {
+    setIsRunning(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+
+    if (activeTab === "hourly") {
+      setHourlyInput(value);
+      const numberValue = parseFloat(value);
+      setHourlyRate(isNaN(numberValue) ? null : numberValue);
+      if (isNaN(numberValue)) setEarnings(0);
+    } else {
+      setYearlyInput(value);
+      const numberValue = parseFloat(value);
+      setYearlyRate(isNaN(numberValue) ? null : numberValue);
+      if (isNaN(numberValue)) {
+        setEarnings(0);
+      } else {
+        setEarnings(calculateYearlyEarnings());
+      }
+    }
+  };
+
+  const handleCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCurrency = currencies.find((curr) => curr.code === e.target.value);
+    if (newCurrency) {
+      setSelectedCurrency(newCurrency);
+    }
+  };
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setIsRunning(false);
+    setInputError("");
+    if (earningsInterval.current) {
+      clearInterval(earningsInterval.current);
+    }
+    // Reset earnings if there's no input in the new tab
+    if (tab === "hourly" && !hourlyRate) {
+      setEarnings(0);
+    } else if (tab === "yearly" && !yearlyRate) {
+      setEarnings(0);
+    } else if (tab === "yearly" && yearlyRate) {
+      setEarnings(calculateYearlyEarnings());
+    } else {
+      setEarnings(0);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "yearly" && yearlyRate) {
+      setEarnings(calculateYearlyEarnings());
+      const updateInterval = setInterval(() => {
+        setEarnings(calculateYearlyEarnings());
+      }, 1000); // Update every second
+      return () => clearInterval(updateInterval);
+    }
+
+    if (isRunning && hourlyRate && activeTab === "hourly") {
+      const ratePerMs = hourlyRate / (60 * 60 * 1000);
+      earningsInterval.current = setInterval(() => {
+        setEarnings((prev) => prev + ratePerMs * 100);
+      }, 100);
+    }
+
+    return () => {
+      if (earningsInterval.current) {
+        clearInterval(earningsInterval.current);
+      }
+    };
+  }, [isRunning, hourlyRate, activeTab, yearlyRate]);
+
+  const handleReset = () => {
+    setIsRunning(false);
+    setEarnings(0);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+          Pay Counter
+        </h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => handleTabChange("hourly")}
+            className={`flex-1 py-2 rounded-md transition-colors duration-200 ${
+              activeTab === "hourly"
+                ? "bg-white shadow-sm text-indigo-600"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Hourly Rate
+          </button>
+          <button
+            onClick={() => handleTabChange("yearly")}
+            className={`flex-1 py-2 rounded-md transition-colors duration-200 ${
+              activeTab === "yearly"
+                ? "bg-white shadow-sm text-indigo-600"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
           >
-            Read our docs
-          </a>
+            Yearly Salary
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="relative">
+              <label
+                htmlFor="rate"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                {activeTab === "hourly" ? "Hourly Rate" : "Yearly Salary"}
+              </label>
+              <div className="relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  {selectedCurrency.icon}
+                </div>
+                <input
+                  type="number"
+                  id="rate"
+                  className="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder={`Enter ${
+                    activeTab === "hourly" ? "rate" : "salary"
+                  }`}
+                  value={activeTab === "hourly" ? hourlyInput : yearlyInput}
+                  onChange={handleInputChange}
+                  disabled={activeTab === "hourly" && isRunning}
+                />
+              </div>
+            </div>
+
+            <div className="relative">
+              <label
+                htmlFor="currency"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Currency
+              </label>
+              <select
+                id="currency"
+                className="block w-full py-2 px-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={selectedCurrency.code}
+                onChange={handleCurrencyChange}
+                disabled={activeTab === "hourly" && isRunning}
+              >
+                {currencies.map((curr) => (
+                  <option key={curr.code} value={curr.code}>
+                    {curr.code} ({curr.symbol})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {inputError && (
+            <p className="mt-2 text-sm text-red-600">{inputError}</p>
+          )}
+
+          <div className="bg-gray-50 rounded-xl p-6 text-center">
+            <p className="text-sm text-gray-600 mb-2">
+              {activeTab === "hourly" ? "Current Earnings" : "Earned This Year"}
+            </p>
+            <p className="text-4xl font-bold text-indigo-600">
+              {selectedCurrency.symbol}
+              {earnings.toFixed(2)}
+            </p>
+            {activeTab === "yearly" && yearlyRate && (
+              <p className="text-sm text-gray-500 mt-2">
+                {(calculateYearProgress() * 100).toFixed(1)}% through the year
+              </p>
+            )}
+          </div>
+
+          {activeTab === "hourly" && (
+            <div className="flex space-x-4">
+              <button
+                onClick={isRunning ? stopCounter : startCounter}
+                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-white font-medium ${
+                  isRunning
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-green-500 hover:bg-green-600"
+                } transition-colors duration-200`}
+              >
+                {isRunning ? (
+                  <>
+                    <Pause className="w-5 h-5 mr-2" />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5 mr-2" />
+                    Start
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
