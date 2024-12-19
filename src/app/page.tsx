@@ -17,7 +17,8 @@ export default function PayCounter() {
   const [hourlyInput, setHourlyInput] = useState("");
   const [yearlyInput, setYearlyInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [earnings, setEarnings] = useState(0);
+  const [hourlyEarnings, setHourlyEarnings] = useState(0);
+  const [yearlyEarnings, setYearlyEarnings] = useState(0);
   const [inputError, setInputError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>({
     code: "GBP",
@@ -46,7 +47,7 @@ export default function PayCounter() {
   };
 
   const startCounter = () => {
-    if (activeTab === "hourly" && (!hourlyRate || hourlyRate <= 0)) {
+    if (!hourlyRate || hourlyRate <= 0) {
       setInputError("Please enter a valid hourly rate");
       return;
     }
@@ -65,15 +66,15 @@ export default function PayCounter() {
       setHourlyInput(value);
       const numberValue = parseFloat(value);
       setHourlyRate(isNaN(numberValue) ? null : numberValue);
-      if (isNaN(numberValue)) setEarnings(0);
+      if (isNaN(numberValue)) setHourlyEarnings(0);
     } else {
       setYearlyInput(value);
       const numberValue = parseFloat(value);
       setYearlyRate(isNaN(numberValue) ? null : numberValue);
       if (isNaN(numberValue)) {
-        setEarnings(0);
+        setYearlyEarnings(0);
       } else {
-        setEarnings(calculateYearlyEarnings());
+        setYearlyEarnings(calculateYearlyEarnings());
       }
     }
   };
@@ -87,49 +88,38 @@ export default function PayCounter() {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    setIsRunning(false);
     setInputError("");
-    if (earningsInterval.current) {
-      clearInterval(earningsInterval.current);
-    }
-    // Reset earnings if there's no input in the new tab
-    if (tab === "hourly" && !hourlyRate) {
-      setEarnings(0);
-    } else if (tab === "yearly" && !yearlyRate) {
-      setEarnings(0);
-    } else if (tab === "yearly" && yearlyRate) {
-      setEarnings(calculateYearlyEarnings());
-    } else {
-      setEarnings(0);
-    }
   };
 
   useEffect(() => {
-    if (activeTab === "yearly" && yearlyRate) {
-      setEarnings(calculateYearlyEarnings());
-      const updateInterval = setInterval(() => {
-        setEarnings(calculateYearlyEarnings());
-      }, 1000); // Update every second
-      return () => clearInterval(updateInterval);
+    if (yearlyRate) {
+      const updateYearlyEarnings = () => {
+        setYearlyEarnings(calculateYearlyEarnings());
+      };
+      updateYearlyEarnings();
+      const yearlyInterval = setInterval(updateYearlyEarnings, 1000);
+      return () => clearInterval(yearlyInterval);
     }
+  }, [yearlyRate]);
 
-    if (isRunning && hourlyRate && activeTab === "hourly") {
+  useEffect(() => {
+    if (isRunning && hourlyRate) {
       const ratePerMs = hourlyRate / (60 * 60 * 1000);
       earningsInterval.current = setInterval(() => {
-        setEarnings((prev) => prev + ratePerMs * 100);
+        setHourlyEarnings((prev) => prev + ratePerMs * 100);
       }, 100);
-    }
 
-    return () => {
-      if (earningsInterval.current) {
-        clearInterval(earningsInterval.current);
-      }
-    };
-  }, [isRunning, hourlyRate, activeTab, yearlyRate]);
+      return () => {
+        if (earningsInterval.current) {
+          clearInterval(earningsInterval.current);
+        }
+      };
+    }
+  }, [isRunning, hourlyRate]);
 
   const handleReset = () => {
     setIsRunning(false);
-    setEarnings(0);
+    setHourlyEarnings(0);
   };
 
   return (
@@ -222,11 +212,19 @@ export default function PayCounter() {
             </p>
             <p className="text-4xl font-bold text-indigo-600">
               {selectedCurrency.symbol}
-              {earnings.toFixed(2)}
+              {activeTab === "hourly"
+                ? hourlyEarnings.toFixed(2)
+                : yearlyEarnings.toFixed(2)}
             </p>
             {activeTab === "yearly" && yearlyRate && (
               <p className="text-sm text-gray-500 mt-2">
                 {(calculateYearProgress() * 100).toFixed(1)}% through the year
+              </p>
+            )}
+            {activeTab === "yearly" && isRunning && hourlyRate && (
+              <p className="text-sm text-gray-500 mt-2">
+                Hourly counter running: {selectedCurrency.symbol}
+                {hourlyEarnings.toFixed(2)}
               </p>
             )}
           </div>
