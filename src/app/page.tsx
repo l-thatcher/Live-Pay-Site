@@ -1,6 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, DollarSign, PoundSterling, Euro } from "lucide-react";
+import {
+  Play,
+  Pause,
+  DollarSign,
+  PoundSterling,
+  Euro,
+  ChevronDown,
+} from "lucide-react";
 
 type Currency = {
   code: string;
@@ -10,6 +17,20 @@ type Currency = {
 
 type TabType = "hourly" | "yearly";
 
+type TimeProgress = {
+  year: number;
+  month: number;
+  week: number;
+  day: number;
+};
+
+type ExpandedSections = {
+  year: boolean;
+  month: boolean;
+  week: boolean;
+  day: boolean;
+};
+
 export default function PayCounter() {
   const [activeTab, setActiveTab] = useState<TabType>("hourly");
   const [hourlyRate, setHourlyRate] = useState<number | null>(null);
@@ -18,7 +39,18 @@ export default function PayCounter() {
   const [yearlyInput, setYearlyInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [hourlyEarnings, setHourlyEarnings] = useState(0);
-  const [yearlyEarnings, setYearlyEarnings] = useState(0);
+  const [periodEarnings, setPeriodEarnings] = useState<TimeProgress>({
+    year: 0,
+    month: 0,
+    week: 0,
+    day: 0,
+  });
+  const [expandedSections, setExpandedSections] = useState<ExpandedSections>({
+    year: true,
+    month: false,
+    week: false,
+    day: false,
+  });
   const [inputError, setInputError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>({
     code: "GBP",
@@ -33,17 +65,52 @@ export default function PayCounter() {
     { code: "USD", symbol: "$", icon: <DollarSign className="h-5 w-5" /> },
   ];
 
-  const calculateYearProgress = () => {
+  const calculateTimeProgress = (): TimeProgress => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const timeDiff = now.getTime() - startOfYear.getTime();
-    const yearProgress = timeDiff / (1000 * 60 * 60 * 24 * 365);
-    return yearProgress;
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const msInYear = 365 * 24 * 60 * 60 * 1000;
+    const daysInMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0
+    ).getDate();
+    const msInMonth = daysInMonth * 24 * 60 * 60 * 1000;
+    const msInWeek = 7 * 24 * 60 * 60 * 1000;
+    const msInDay = 24 * 60 * 60 * 1000;
+
+    return {
+      year: (now.getTime() - startOfYear.getTime()) / msInYear,
+      month: (now.getTime() - startOfMonth.getTime()) / msInMonth,
+      week: (now.getTime() - startOfWeek.getTime()) / msInWeek,
+      day: (now.getTime() - startOfDay.getTime()) / msInDay,
+    };
   };
 
-  const calculateYearlyEarnings = () => {
-    if (!yearlyRate) return 0;
-    return yearlyRate * calculateYearProgress();
+  const calculatePeriodEarnings = () => {
+    if (!yearlyRate) return;
+    const progress = calculateTimeProgress();
+    const daysInMonth = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() + 1,
+      0
+    ).getDate();
+
+    setPeriodEarnings({
+      year: yearlyRate * progress.year,
+      month: (yearlyRate / 12) * progress.month,
+      week: (yearlyRate / 52) * progress.week,
+      day: (yearlyRate / 365) * progress.day,
+    });
   };
 
   const startCounter = () => {
@@ -72,9 +139,12 @@ export default function PayCounter() {
       const numberValue = parseFloat(value);
       setYearlyRate(isNaN(numberValue) ? null : numberValue);
       if (isNaN(numberValue)) {
-        setYearlyEarnings(0);
-      } else {
-        setYearlyEarnings(calculateYearlyEarnings());
+        setPeriodEarnings({
+          year: 0,
+          month: 0,
+          week: 0,
+          day: 0,
+        });
       }
     }
   };
@@ -89,16 +159,36 @@ export default function PayCounter() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setInputError("");
+    if (tab === "hourly") {
+      setHourlyEarnings(0);
+      setIsRunning(false);
+    } else {
+      setPeriodEarnings({
+        year: 0,
+        month: 0,
+        week: 0,
+        day: 0,
+      });
+    }
+  };
+
+  const toggleSection = (section: keyof ExpandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  const handleReset = () => {
+    setIsRunning(false);
+    setHourlyEarnings(0);
   };
 
   useEffect(() => {
     if (yearlyRate) {
-      const updateYearlyEarnings = () => {
-        setYearlyEarnings(calculateYearlyEarnings());
-      };
-      updateYearlyEarnings();
-      const yearlyInterval = setInterval(updateYearlyEarnings, 1000);
-      return () => clearInterval(yearlyInterval);
+      calculatePeriodEarnings();
+      const periodInterval = setInterval(calculatePeriodEarnings, 1000);
+      return () => clearInterval(periodInterval);
     }
   }, [yearlyRate]);
 
@@ -117,15 +207,10 @@ export default function PayCounter() {
     }
   }, [isRunning, hourlyRate]);
 
-  const handleReset = () => {
-    setIsRunning(false);
-    setHourlyEarnings(0);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+      <div className="bg-white rounded-2xl shadow-xl p-8  my-16 w-full max-w-md transform transition-all duration-500 hover:scale-102 hover:shadow-2xl">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center animate-fade-in">
           Pay Counter
         </h1>
 
@@ -206,42 +291,122 @@ export default function PayCounter() {
             <p className="mt-2 text-sm text-red-600">{inputError}</p>
           )}
 
-          <div className="bg-gray-50 rounded-xl p-6 text-center">
-            <p className="text-sm text-gray-600 mb-2">
-              {activeTab === "hourly" ? "Current Earnings" : "Earned This Year"}
-            </p>
-            <p className="text-4xl font-bold text-indigo-600">
-              {selectedCurrency.symbol}
-              {activeTab === "hourly"
-                ? hourlyEarnings.toFixed(2)
-                : yearlyEarnings.toFixed(2)}
-            </p>
-            {activeTab === "yearly" && yearlyRate && (
-              <p className="text-sm text-gray-500 mt-2">
-                {(calculateYearProgress() * 100).toFixed(1)}% through the year
-              </p>
-            )}
-            {activeTab === "yearly" && isRunning && hourlyRate && (
-              <p className="text-sm text-gray-500 mt-2">
-                Hourly counter running: {selectedCurrency.symbol}
-                {hourlyEarnings.toFixed(2)}
-              </p>
+          <div className="bg-gray-50 rounded-xl p-6 text-center transform transition-all duration-300 hover:shadow-md">
+            {activeTab === "hourly" ? (
+              <div className="animate-fade-in">
+                <p className="text-sm text-gray-600 mb-2">Current Earnings</p>
+                <p className="text-4xl font-bold text-indigo-600">
+                  {selectedCurrency.symbol}
+                  {hourlyEarnings.toFixed(2)}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(periodEarnings).map(([period, amount]) => (
+                  <div
+                    key={period}
+                    className="bg-white rounded-lg shadow-sm overflow-hidden"
+                  >
+                    <button
+                      onClick={() =>
+                        toggleSection(period as keyof ExpandedSections)
+                      }
+                      className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      <div>
+                        <p className="text-sm text-gray-600 capitalize">
+                          {period === "year" ? "This Year" : `This ${period}`}
+                        </p>
+                        <p className="text-2xl font-bold text-indigo-600">
+                          {selectedCurrency.symbol}
+                          {amount.toFixed(2)}
+                        </p>
+                      </div>
+                      <ChevronDown
+                        className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
+                          expandedSections[period as keyof ExpandedSections]
+                            ? "transform rotate-180"
+                            : ""
+                        }`}
+                      />
+                    </button>
+
+                    <div
+                      className={`transition-all duration-300 ease-in-out ${
+                        expandedSections[period as keyof ExpandedSections]
+                          ? "max-h-40 opacity-100"
+                          : "max-h-0 opacity-0"
+                      }`}
+                    >
+                      <div className="p-4 border-t border-gray-100">
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>Progress</span>
+                            <span>
+                              {(
+                                (periodEarnings[period as keyof TimeProgress] /
+                                  (yearlyRate! /
+                                    (period === "year"
+                                      ? 1
+                                      : period === "month"
+                                      ? 12
+                                      : period === "week"
+                                      ? 52
+                                      : 365))) *
+                                100
+                              ).toFixed(1)}
+                              %
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 h-2 rounded-full">
+                            <div
+                              className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                              style={{
+                                width: `${
+                                  (periodEarnings[
+                                    period as keyof TimeProgress
+                                  ] /
+                                    (yearlyRate! /
+                                      (period === "year"
+                                        ? 1
+                                        : period === "month"
+                                        ? 12
+                                        : period === "week"
+                                        ? 52
+                                        : 365))) *
+                                  100
+                                }%`,
+                              }}
+                            />
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {period === "year" && "Since January 1st"}
+                            {period === "month" && "Since start of month"}
+                            {period === "week" && "Since Sunday"}
+                            {period === "day" && "Since midnight"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {activeTab === "hourly" && (
-            <div className="flex space-x-4">
+            <div className="flex space-x-4 animate-fade-in">
               <button
                 onClick={isRunning ? stopCounter : startCounter}
-                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-white font-medium ${
+                className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-white font-medium transform transition-all duration-300 hover:scale-105 ${
                   isRunning
                     ? "bg-red-500 hover:bg-red-600"
                     : "bg-green-500 hover:bg-green-600"
-                } transition-colors duration-200`}
+                }`}
               >
                 {isRunning ? (
                   <>
-                    <Pause className="w-5 h-5 mr-2" />
+                    <Pause className="w-5 w-5 mr-2" />
                     Stop
                   </>
                 ) : (
@@ -253,7 +418,7 @@ export default function PayCounter() {
               </button>
               <button
                 onClick={handleReset}
-                className="px-4 py-2 rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                className="px-4 py-2 rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200 transform transition-all duration-300 hover:scale-105"
               >
                 Reset
               </button>
@@ -261,6 +426,26 @@ export default function PayCounter() {
           )}
         </div>
       </div>
+      <style jsx global>
+        {`
+          .animate-fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+          }
+          .scale-102 {
+            transform: scale(1.02);
+          }
+          @keyframes fadeIn {
+            0% {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            100% {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}
+      </style>
     </div>
   );
 }
