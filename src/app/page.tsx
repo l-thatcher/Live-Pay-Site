@@ -25,7 +25,6 @@ type TimeProgress = {
 };
 
 type ExpandedSections = {
-  year: boolean;
   month: boolean;
   week: boolean;
   day: boolean;
@@ -46,7 +45,6 @@ export default function PayCounter() {
     day: 0,
   });
   const [expandedSections, setExpandedSections] = useState<ExpandedSections>({
-    year: true,
     month: false,
     week: false,
     day: false,
@@ -68,13 +66,10 @@ export default function PayCounter() {
   const calculateTimeProgress = (): TimeProgress => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
-
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
-
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -99,12 +94,6 @@ export default function PayCounter() {
   const calculatePeriodEarnings = () => {
     if (!yearlyRate) return;
     const progress = calculateTimeProgress();
-    const daysInMonth = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth() + 1,
-      0
-    ).getDate();
-
     setPeriodEarnings({
       year: yearlyRate * progress.year,
       month: (yearlyRate / 12) * progress.month,
@@ -207,9 +196,66 @@ export default function PayCounter() {
     }
   }, [isRunning, hourlyRate]);
 
+  const renderProgressSection = (
+    period: "month" | "week" | "day",
+    amount: number,
+    isExpanded: boolean,
+    yearlyDivisor: number
+  ) => {
+    if (!yearlyRate) return null;
+
+    const progress = (amount / (yearlyRate / yearlyDivisor)) * 100;
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-2">
+        <button
+          onClick={() => toggleSection(period)}
+          className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors duration-200"
+        >
+          <p className="text-sm text-gray-600 capitalize">This {period}</p>
+          <ChevronDown
+            className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
+              isExpanded ? "transform rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <div
+          className={`transition-all duration-300 ease-in-out overflow-hidden ${
+            isExpanded ? "max-h-40" : "max-h-0"
+          }`}
+        >
+          <div className="p-4 border-t border-gray-100">
+            <p className="text-2xl font-bold text-indigo-600 mb-4">
+              {selectedCurrency.symbol}
+              {amount.toFixed(2)}
+            </p>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Progress</span>
+                <span>{progress.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 h-2 rounded-full">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="text-sm text-gray-500">
+                {period === "month" && "Since start of month"}
+                {period === "week" && "Since Sunday"}
+                {period === "day" && "Since midnight"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8  my-16 w-full max-w-md transform transition-all duration-500 hover:scale-102 hover:shadow-2xl">
+      <div className="bg-white rounded-2xl shadow-xl p-8 my-16 w-full max-w-md transform transition-all duration-500 hover:scale-102 hover:shadow-2xl">
         <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center animate-fade-in">
           Pay Counter
         </h1>
@@ -301,95 +347,64 @@ export default function PayCounter() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {Object.entries(periodEarnings).map(([period, amount]) => (
-                  <div
-                    key={period}
-                    className="bg-white rounded-lg shadow-sm overflow-hidden"
-                  >
-                    <button
-                      onClick={() =>
-                        toggleSection(period as keyof ExpandedSections)
-                      }
-                      className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors duration-200"
-                    >
-                      <div>
-                        <p className="text-sm text-gray-600 capitalize">
-                          {period === "year" ? "This Year" : `This ${period}`}
-                        </p>
-                        <p className="text-2xl font-bold text-indigo-600">
-                          {selectedCurrency.symbol}
-                          {amount.toFixed(2)}
-                        </p>
-                      </div>
-                      <ChevronDown
-                        className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
-                          expandedSections[period as keyof ExpandedSections]
-                            ? "transform rotate-180"
-                            : ""
-                        }`}
-                      />
-                    </button>
-
-                    <div
-                      className={`transition-all duration-300 ease-in-out ${
-                        expandedSections[period as keyof ExpandedSections]
-                          ? "max-h-40 opacity-100"
-                          : "max-h-0 opacity-0"
-                      }`}
-                    >
-                      <div className="p-4 border-t border-gray-100">
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm text-gray-600">
-                            <span>Progress</span>
-                            <span>
-                              {(
-                                (periodEarnings[period as keyof TimeProgress] /
-                                  (yearlyRate! /
-                                    (period === "year"
-                                      ? 1
-                                      : period === "month"
-                                      ? 12
-                                      : period === "week"
-                                      ? 52
-                                      : 365))) *
-                                100
-                              ).toFixed(1)}
-                              %
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 h-2 rounded-full">
-                            <div
-                              className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
-                              style={{
-                                width: `${
-                                  (periodEarnings[
-                                    period as keyof TimeProgress
-                                  ] /
-                                    (yearlyRate! /
-                                      (period === "year"
-                                        ? 1
-                                        : period === "month"
-                                        ? 12
-                                        : period === "week"
-                                        ? 52
-                                        : 365))) *
-                                  100
-                                }%`,
-                              }}
-                            />
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {period === "year" && "Since January 1st"}
-                            {period === "month" && "Since start of month"}
-                            {period === "week" && "Since Sunday"}
-                            {period === "day" && "Since midnight"}
-                          </div>
+              <div className="space-y-4">
+                {yearlyRate ? (
+                  <>
+                    <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+                      <p className="text-sm text-gray-600 mb-1">This Year</p>
+                      <p className="text-2xl font-bold text-indigo-600">
+                        {selectedCurrency.symbol}
+                        {periodEarnings.year.toFixed(2)}
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Progress</span>
+                          <span>
+                            {((periodEarnings.year / yearlyRate) * 100).toFixed(
+                              1
+                            )}
+                            %
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full">
+                          <div
+                            className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${
+                                (periodEarnings.year / yearlyRate) * 100
+                              }%`,
+                            }}
+                          />
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Since January 1st
                         </div>
                       </div>
                     </div>
+                    {renderProgressSection(
+                      "month",
+                      periodEarnings.month,
+                      expandedSections.month,
+                      12
+                    )}
+                    {renderProgressSection(
+                      "week",
+                      periodEarnings.week,
+                      expandedSections.week,
+                      52
+                    )}
+                    {renderProgressSection(
+                      "day",
+                      periodEarnings.day,
+                      expandedSections.day,
+                      365
+                    )}
+                  </>
+                ) : (
+                  <div className="text-gray-500 py-4">
+                    Enter a yearly salary to see earnings breakdown
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
